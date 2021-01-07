@@ -1,0 +1,2 @@
+option('with_stardundee', type: 'boolean', value: false, description: 'Enable STAR Dundee bridge wrapper.')
+option('teamcity', type: 'boolean', value: false, description: 'Set teamcity reporer for tests.')
