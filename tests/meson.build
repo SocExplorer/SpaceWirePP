@@ -8,6 +8,6 @@ if get_option('teamcity')
 endif
 
 foreach test:tests
-    exe = executable(test, test + '/main.cpp', dependencies:[catch_dep, SpaceWirePP_dep])
+    exe = executable('test_'+test, test + '/main.cpp', dependencies:[catch_dep, SpaceWirePP_dep])
     test('test_'+test, exe, args: test_args)
 endforeach
