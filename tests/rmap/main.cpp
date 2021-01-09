@@ -52,3 +52,11 @@ SCENARIO("RMAP field extraction", "[]")
         REQUIRE(spacewire::rmap::fields::header_crc(packet) == 16);
     }
 }
+
+SCENARIO("RMAP read request", "[]")
+{
+    auto packet = spacewire::rmap::build_read_request(254, 2, 32, 0x80000000, 0x1234, 32);
+    REQUIRE_THAT(std::vector(packet, packet+spacewire::rmap::read_request_buffer_size()),
+        Catch::Equals<uint8_t>({ 0xfe, 0x1, 0x4c, 0x2, 0x20, 0x12, 0x34, 0x0, 0x80, 0x0, 0x0, 0x0,
+                                 0x0, 0x0, 0x20, 0x3a }));
+}

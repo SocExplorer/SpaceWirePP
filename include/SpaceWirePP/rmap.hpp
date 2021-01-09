@@ -142,7 +142,7 @@ inline unsigned char* build_read_request(unsigned char destination_logical_addre
     fields::extended_read_address(buffer) = 0;
     fields::address(buffer) = read_address;
     fields::data_length(buffer) = data_length;
-    fields::header_crc(buffer) = spacewire::crc(buffer, request_header_size());
+    fields::header_crc(buffer) = spacewire::crc(buffer, request_header_size()-1);
     return buffer;
 }
 
@@ -163,7 +163,7 @@ inline unsigned char* build_write_request(unsigned char destination_logical_addr
     fields::extended_read_address(buffer) = 0;
     fields::address(buffer) = write_address;
     fields::data_length(buffer) = data_length;
-    fields::header_crc(buffer) = spacewire::crc(buffer, request_header_size());
+    fields::header_crc(buffer) = spacewire::crc(buffer, request_header_size()-1);
     std::memcpy(fields::data(buffer), data, data_length);
     fields::data_crc(buffer) = spacewire::crc(fields::data(buffer), data_length);
     return buffer;
