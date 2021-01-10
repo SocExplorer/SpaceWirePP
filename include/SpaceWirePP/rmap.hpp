@@ -79,39 +79,79 @@ namespace spacewire::rmap
 namespace fields
 {
     inline unsigned char& packet_type(unsigned char* packet) { return packet[2]; }
+    inline const unsigned char& packet_type(const unsigned char* packet) { return packet[2]; }
 
     inline unsigned char& destination_key(unsigned char* packet) { return packet[3]; }
+    inline const unsigned char& destination_key(const unsigned char* packet) { return packet[3]; }
 
     inline unsigned char& source_logical_address(unsigned char* packet) { return packet[4]; }
+    inline const unsigned char& source_logical_address(const unsigned char* packet)
+    {
+        return packet[4];
+    }
 
     inline field_proxy<uint16_t> transaction_idetifier(unsigned char* packet)
     {
-        return field_proxy<uint16_t> { packet + 5 };
+        return { packet + 5 };
+    }
+
+    inline field_proxy<uint16_t, true> transaction_idetifier(const unsigned char* packet)
+    {
+        return { packet + 5 };
     }
 
     inline unsigned char& extended_read_address(unsigned char* packet) { return packet[7]; }
-
-    inline field_proxy<uint32_t> address(unsigned char* packet)
+    inline const unsigned char& extended_read_address(const unsigned char* packet)
     {
-        return field_proxy<uint32_t> { packet + 8 };
+        return packet[7];
     }
 
-    inline field_proxy<uint24_t> data_length(unsigned char* packet)
+    inline field_proxy<uint32_t> address(unsigned char* packet) { return { packet + 8 }; }
+    inline field_proxy<uint32_t, true> address(const unsigned char* packet)
     {
-        return field_proxy<uint24_t> { packet + 12 };
+        return { packet + 8 };
+    }
+
+    inline field_proxy<uint24_t> data_length(unsigned char* packet) { return { packet + 12 }; }
+    inline field_proxy<uint24_t, true> data_length(const unsigned char* packet)
+    {
+        return { packet + 12 };
     }
 
     inline unsigned char& header_crc(unsigned char* packet) { return packet[15]; }
+    inline const unsigned char& header_crc(const unsigned char* packet) { return packet[15]; }
+
     inline unsigned char& data_crc(unsigned char* packet)
     {
         std::size_t crc_offset = data_length(packet) + 16;
         return packet[crc_offset];
     }
-    inline unsigned char* data(unsigned char* packet) { return packet + 16; }
+    inline const unsigned char& data_crc(const unsigned char* packet)
+    {
+        std::size_t crc_offset = data_length(packet) + 16;
+        return packet[crc_offset];
+    }
 
+    inline unsigned char* data(unsigned char* packet) { return packet + 16; }
+    inline const unsigned char* data(const unsigned char* packet) { return packet + 16; }
 
 }
 
+inline bool is_rmap(const unsigned char* packet)
+{
+    return spacewire::fields::protocol_identifier(packet)
+        == spacewire::protocol_id_t::SPW_PROTO_ID_RMAP;
+}
+
+inline bool is_rmap_write_response(const unsigned char* packet)
+{
+    return (fields::packet_type(packet)&0b11100000)==0b00100000;
+}
+
+inline bool is_rmap_read_response(const unsigned char* packet)
+{
+    return (fields::packet_type(packet)&0b11111000)==0b00001000;
+}
 
 inline constexpr std::size_t request_header_size()
 {
@@ -142,13 +182,13 @@ inline unsigned char* build_read_request(unsigned char destination_logical_addre
     fields::extended_read_address(buffer) = 0;
     fields::address(buffer) = read_address;
     fields::data_length(buffer) = data_length;
-    fields::header_crc(buffer) = spacewire::crc(buffer, request_header_size()-1);
+    fields::header_crc(buffer) = spacewire::crc(buffer, request_header_size() - 1);
     return buffer;
 }
 
 inline unsigned char* build_write_request(unsigned char destination_logical_address,
     unsigned char destination_key, unsigned char source_logical_address, uint32_t write_address,
-    uint16_t transaction_id, unsigned char* data, uint32_t data_length,
+    uint16_t transaction_id, const unsigned char* data, uint32_t data_length,
     unsigned char* buffer = nullptr)
 {
     assert(data_length < (1 << 24));
@@ -156,14 +196,14 @@ inline unsigned char* build_write_request(unsigned char destination_logical_addr
         buffer = new unsigned char[write_request_buffer_size(data_length)]();
     spacewire::fields::destination_logical_address(buffer) = destination_logical_address;
     spacewire::fields::protocol_identifier(buffer) = protocol_id_t::SPW_PROTO_ID_RMAP;
-    fields::packet_type(buffer) = 0b01001100;
+    fields::packet_type(buffer) = 0b01101100;
     fields::destination_key(buffer) = destination_key;
     fields::source_logical_address(buffer) = source_logical_address;
     fields::transaction_idetifier(buffer) = transaction_id;
     fields::extended_read_address(buffer) = 0;
     fields::address(buffer) = write_address;
     fields::data_length(buffer) = data_length;
-    fields::header_crc(buffer) = spacewire::crc(buffer, request_header_size()-1);
+    fields::header_crc(buffer) = spacewire::crc(buffer, request_header_size() - 1);
     std::memcpy(fields::data(buffer), data, data_length);
     fields::data_crc(buffer) = spacewire::crc(fields::data(buffer), data_length);
     return buffer;

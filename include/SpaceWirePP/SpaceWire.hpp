@@ -48,10 +48,11 @@ struct uint24_t
     bool operator==(const int& v) const { return static_cast<uint32_t>(v) == value; }
 };
 
-template <typename T>
+template <typename T, bool is_const=false>
 struct field_proxy
 {
-    field_proxy(unsigned char* packet) : packet { packet } { }
+    using packet_type = std::conditional_t<is_const,const unsigned char*,unsigned char*>;
+    field_proxy(packet_type packet) : packet { packet } { }
     field_proxy(const field_proxy& other) : packet { other.packet } { }
     field_proxy(field_proxy&& other) : packet { other.packet } { }
 
@@ -121,7 +122,7 @@ struct field_proxy
     }
 
 private:
-    unsigned char* packet;
+    packet_type packet;
 };
 
 enum class protocol_id_t:unsigned char
@@ -159,9 +160,10 @@ inline unsigned char crc(unsigned char* buffer, int size)
 
 namespace fields
 {
+    inline const unsigned char& destination_logical_address(const unsigned char* packet) { return packet[0]; }
     inline unsigned char& destination_logical_address(unsigned char* packet) { return packet[0]; }
     inline field_proxy<protocol_id_t> protocol_identifier(unsigned char* packet) { return {packet+1}; }
-
+    inline field_proxy<protocol_id_t, true> protocol_identifier(const unsigned char* packet) { return {packet+1}; }
 }
 
 }
