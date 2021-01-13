@@ -14,6 +14,7 @@
 
 SCENARIO("RMAP field extraction", "[]")
 {
+    using namespace spacewire::rmap;
     GIVEN("An RMAP packet")
     {
         unsigned char packet[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
@@ -27,36 +28,35 @@ SCENARIO("RMAP field extraction", "[]")
             }
         }
         REQUIRE(spacewire::fields::protocol_identifier(packet) == 0x2);
-        REQUIRE(spacewire::rmap::fields::packet_type(packet) == 0x3);
-        REQUIRE(spacewire::rmap::fields::destination_key(packet) == 0x4);
-        REQUIRE(spacewire::rmap::fields::source_logical_address(packet) == 0x5);
-        REQUIRE(spacewire::rmap::fields::transaction_idetifier(packet) == 0x607);
-        REQUIRE(spacewire::rmap::fields::address(packet) == 0x90A0B0C);
+        REQUIRE(fields::packet_type(packet) == 0x3);
+        REQUIRE(fields::destination_key(packet) == 0x4);
+        REQUIRE(fields::source_logical_address(packet) == 0x5);
+        REQUIRE(fields::transaction_idetifier(packet) == 0x607);
+        REQUIRE(fields::address(packet) == 0x90A0B0C);
         WHEN("setting address")
         {
-            spacewire::rmap::fields::address(packet) = 0x11223344;
-            THEN("address should be set")
-            {
-                REQUIRE(spacewire::rmap::fields::address(packet) == 0x11223344);
-            }
+            fields::address(packet) = 0x11223344;
+            THEN("address should be set") { REQUIRE(fields::address(packet) == 0x11223344); }
         }
-        REQUIRE(spacewire::rmap::fields::data_length(packet) == 0x0D0E0F);
+        REQUIRE(fields::data_length<rmap_write_cmd_tag>(packet) == 0x0D0E0F);
         WHEN("setting data length")
         {
-            spacewire::rmap::fields::data_length(packet) = 0x112233;
+            fields::data_length<rmap_write_cmd_tag>(packet) = 0x112233;
             THEN("data length should be set")
             {
-                REQUIRE(spacewire::rmap::fields::data_length(packet) == 0x112233);
+                REQUIRE(fields::data_length<rmap_write_cmd_tag>(packet) == 0x112233);
             }
         }
-        REQUIRE(spacewire::rmap::fields::header_crc(packet) == 16);
+        REQUIRE(fields::header_crc<rmap_write_cmd_tag>(packet) == 16);
     }
 }
 
 SCENARIO("RMAP read request", "[]")
 {
-    auto packet = spacewire::rmap::build_read_request(254, 2, 32, 0x80000000, 0x1234, 32);
-    REQUIRE_THAT(std::vector(packet, packet+spacewire::rmap::read_request_buffer_size()),
+    using namespace spacewire::rmap;
+    auto packet = build_read_request(254, 2, 32, 0x80000000, 0x1234, 32);
+    REQUIRE_THAT(std::vector(packet, packet + read_request_buffer_size()),
         Catch::Equals<uint8_t>({ 0xfe, 0x1, 0x4c, 0x2, 0x20, 0x12, 0x34, 0x0, 0x80, 0x0, 0x0, 0x0,
-                                 0x0, 0x0, 0x20, 0x3a }));
+            0x0, 0x0, 0x20, 0x3a }));
+    REQUIRE(header_crc_valid<rmap_read_cmd_tag>(packet));
 }

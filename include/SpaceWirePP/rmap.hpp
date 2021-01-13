@@ -71,10 +71,21 @@
  */
 
 #include "SpaceWire.hpp"
+#include "types/detectors.hpp"
 #include <cassert>
 
 namespace spacewire::rmap
 {
+
+struct rmap_write_cmd_tag;
+struct rmap_read_cmd_tag;
+struct rmap_read_response_tag;
+struct rmap_write_response_tag;
+
+template <typename packet_type>
+static inline constexpr bool is_packet_type_v
+    = cpp_utils::types::detectors::is_any_of_v<packet_type, rmap_read_cmd_tag,
+        rmap_read_response_tag, rmap_write_cmd_tag>;
 
 namespace fields
 {
@@ -112,28 +123,89 @@ namespace fields
         return { packet + 8 };
     }
 
-    inline field_proxy<uint24_t> data_length(unsigned char* packet) { return { packet + 12 }; }
+    template <typename packet_type>
+    static inline constexpr std::size_t data_length_offset()
+    {
+        using namespace cpp_utils::types::detectors;
+        static_assert(is_packet_type_v<packet_type>, "packet_type must be a valid packet type");
+        if constexpr (is_any_of_v<packet_type, rmap_write_cmd_tag, rmap_read_cmd_tag>)
+            return 12;
+        if constexpr (std::is_same_v<packet_type, rmap_read_response_tag>)
+            return 8;
+    }
+
+    template <typename packet_type>
+    inline field_proxy<uint24_t> data_length(unsigned char* packet)
+    {
+        return { packet + data_length_offset<packet_type>() };
+    }
+    template <typename packet_type>
     inline field_proxy<uint24_t, true> data_length(const unsigned char* packet)
     {
-        return { packet + 12 };
+        return { packet + data_length_offset<packet_type>() };
     }
 
-    inline unsigned char& header_crc(unsigned char* packet) { return packet[15]; }
-    inline const unsigned char& header_crc(const unsigned char* packet) { return packet[15]; }
+    template <typename packet_type>
+    static inline constexpr std::size_t header_crc_offset()
+    {
+        using namespace cpp_utils::types::detectors;
+        static_assert(is_packet_type_v<packet_type>, "packet_type must be a valid packet type");
+        if constexpr (is_any_of_v<packet_type, rmap_write_cmd_tag, rmap_read_cmd_tag>)
+            return 15;
+        if constexpr (std::is_same_v<packet_type, rmap_read_response_tag>)
+            return 11;
+        if constexpr (std::is_same_v<packet_type, rmap_write_response_tag>)
+            return 7;
+    }
+    template <typename packet_type>
+    inline unsigned char& header_crc(unsigned char* packet)
+    {
+        return packet[header_crc_offset<packet_type>()];
+    }
+    template <typename packet_type>
+    inline const unsigned char& header_crc(const unsigned char* packet)
+    {
+        return packet[header_crc_offset<packet_type>()];
+    }
 
+    template <typename packet_type>
+    static inline constexpr std::size_t data_offset()
+    {
+        using namespace cpp_utils::types::detectors;
+        static_assert(is_any_of_v<packet_type, rmap_read_response_tag, rmap_write_cmd_tag>,
+            "packet_type must be a valid packet type");
+        if constexpr (is_any_of_v<packet_type, rmap_write_cmd_tag>)
+            return 16;
+        if constexpr (std::is_same_v<packet_type, rmap_read_response_tag>)
+            return 12;
+    }
+
+    template <typename packet_type>
+    inline unsigned char* data(unsigned char* packet)
+    {
+        return packet + data_offset<packet_type>();
+    }
+    template <typename packet_type>
+    inline const unsigned char* data(const unsigned char* packet)
+    {
+        return packet + data_offset<packet_type>();
+    }
+
+    template <typename packet_type>
     inline unsigned char& data_crc(unsigned char* packet)
     {
-        std::size_t crc_offset = data_length(packet) + 16;
-        return packet[crc_offset];
-    }
-    inline const unsigned char& data_crc(const unsigned char* packet)
-    {
-        std::size_t crc_offset = data_length(packet) + 16;
+        const std::size_t crc_offset
+            = data_offset<packet_type>() + data_length<packet_type>(packet);
         return packet[crc_offset];
     }
 
-    inline unsigned char* data(unsigned char* packet) { return packet + 16; }
-    inline const unsigned char* data(const unsigned char* packet) { return packet + 16; }
+    template <typename packet_type>
+    inline const unsigned char& data_crc(const unsigned char* packet)
+    {
+        const std::size_t crc_offset
+            = data_offset<packet_type>() + data_length<packet_type>(packet);
+        return packet[crc_offset];
+    }
 
 }
 
@@ -145,12 +217,12 @@ inline bool is_rmap(const unsigned char* packet)
 
 inline bool is_rmap_write_response(const unsigned char* packet)
 {
-    return (fields::packet_type(packet)&0b11100000)==0b00100000;
+    return (fields::packet_type(packet) & 0b11100000) == 0b00100000;
 }
 
 inline bool is_rmap_read_response(const unsigned char* packet)
 {
-    return (fields::packet_type(packet)&0b11111000)==0b00001000;
+    return (fields::packet_type(packet) & 0b11111000) == 0b00001000;
 }
 
 inline constexpr std::size_t request_header_size()
@@ -165,6 +237,7 @@ inline constexpr std::size_t write_request_buffer_size(std::size_t data_size)
 {
     return request_header_size() + data_size + 1;
 }
+
 
 inline unsigned char* build_read_request(unsigned char destination_logical_address,
     unsigned char destination_key, unsigned char source_logical_address, uint32_t read_address,
@@ -181,8 +254,9 @@ inline unsigned char* build_read_request(unsigned char destination_logical_addre
     fields::transaction_idetifier(buffer) = transaction_id;
     fields::extended_read_address(buffer) = 0;
     fields::address(buffer) = read_address;
-    fields::data_length(buffer) = data_length;
-    fields::header_crc(buffer) = spacewire::crc(buffer, request_header_size() - 1);
+    fields::data_length<rmap_read_cmd_tag>(buffer) = data_length;
+    fields::header_crc<rmap_read_cmd_tag>(buffer)
+        = spacewire::crc(buffer, fields::header_crc_offset<rmap_read_cmd_tag>());
     return buffer;
 }
 
@@ -202,11 +276,28 @@ inline unsigned char* build_write_request(unsigned char destination_logical_addr
     fields::transaction_idetifier(buffer) = transaction_id;
     fields::extended_read_address(buffer) = 0;
     fields::address(buffer) = write_address;
-    fields::data_length(buffer) = data_length;
-    fields::header_crc(buffer) = spacewire::crc(buffer, request_header_size() - 1);
-    std::memcpy(fields::data(buffer), data, data_length);
-    fields::data_crc(buffer) = spacewire::crc(fields::data(buffer), data_length);
+    fields::data_length<rmap_write_cmd_tag>(buffer) = data_length;
+    fields::header_crc<rmap_write_cmd_tag>(buffer)
+        = spacewire::crc(buffer, fields::header_crc_offset<rmap_write_cmd_tag>());
+    std::memcpy(fields::data<rmap_write_cmd_tag>(buffer), data, data_length);
+    fields::data_crc<rmap_write_cmd_tag>(buffer)
+        = spacewire::crc(fields::data<rmap_write_cmd_tag>(buffer), data_length);
     return buffer;
 }
 
+template <typename packet_type>
+inline bool header_crc_valid(const unsigned char* packet)
+{
+    return fields::header_crc<packet_type>(packet)
+        == spacewire::crc(packet, fields::header_crc_offset<packet_type>());
 }
+
+template <typename packet_type>
+inline bool data_crc_valid(const unsigned char* packet)
+{
+    return fields::data_crc<packet_type>(packet)
+        == spacewire::crc(packet + fields::data_offset<packet_type>(),
+            fields::data_length<packet_type>(packet));
+}
+}
+

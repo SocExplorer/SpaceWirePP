@@ -90,9 +90,16 @@ struct field_proxy
         return os;
     }
 
-    template <typename Dummy = void,
+    /*template <typename Dummy = void,
         typename = std::enable_if_t<std::is_same_v<uint24_t, T>, Dummy>>
     operator uint32_t() const
+    {
+        return this->operator T().value;
+    }*/
+
+    template <typename Dummy = void,
+        typename = std::enable_if_t<std::is_same_v<uint24_t, T>, Dummy>>
+    operator std::size_t() const
     {
         return this->operator T().value;
     }
@@ -153,14 +160,15 @@ static constexpr std::array<unsigned char, 256> CRCTable { 0x00, 0x91, 0xe3, 0x7
     0xc1, 0xba, 0x2b, 0x59, 0xc8, 0xbd, 0x2c, 0x5e, 0xcf };
 
 
-inline unsigned char crc(unsigned char* buffer, int size)
+inline unsigned char crc(const unsigned char* buffer, std::size_t size)
 {
     return std::accumulate(buffer, buffer+size, 0,[](auto crc, auto value){return CRCTable[crc ^ value];});
 }
 
 namespace fields
 {
-    inline const unsigned char& destination_logical_address(const unsigned char* packet) { return packet[0]; }
+    template <typename T>
+    inline std::conditional<std::is_const_v<T>,const unsigned char&,unsigned char&> destination_logical_address(T packet) { return packet[0]; }
     inline unsigned char& destination_logical_address(unsigned char* packet) { return packet[0]; }
     inline field_proxy<protocol_id_t> protocol_identifier(unsigned char* packet) { return {packet+1}; }
     inline field_proxy<protocol_id_t, true> protocol_identifier(const unsigned char* packet) { return {packet+1}; }
